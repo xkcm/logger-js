@@ -1,71 +1,86 @@
-import { chalkTaggedTemplate, createAutoIncrement, type } from "./utils"
 import { cloneDeep } from "lodash"
-import { DefinedMethods, LoggerMessage, ReplacerFn, PredefinedValue, LoggerOpts } from "./types"
+import { chalkTaggedTemplate, createAutoIncrement, vtype } from "./utils"
 
-export class Adapter {
+type PredefinedValue = unknown | (() => unknown)
+type PredefinedValuesObject = Record<string, PredefinedValue>
+type ReplacerFn = (a: string, b: unknown, index?: number, array?: unknown[]) => string
+type LoggerConstructorOptions = Partial<{
+  replacer: ReplacerFn;
+  predefinedValues: PredefinedValuesObject;
+  id: string;
+  format: string;
+  logLevel: number;
+}> & Required<{
+  transports: Transport[]
+}>
 
-  static Console = new Adapter("console-adapter", {
-    write: s => {
-      if (!s.muted) process.stdout.write(s.content.formatted)
-    }
-  })
-
-  private isEnabled: boolean = true
-  constructor(public readonly id, private definedMethods: DefinedMethods, public context: object = {}){}
-  public write(msg: LoggerMessage){
-    if (this.isEnabled)
-      this.definedMethods.write?.(msg, this.context)
-  }
-  public disable(){
-    this.isEnabled = false
-  }
-  public enable(){
-    this.isEnabled = true
-  }
+type LoggerMessage = {
+  content: {
+    raw: unknown[];
+    formatted?: string;
+  };
+  level: number;
+  sourceLogger: string;
+  forceFormat?: string;
+  predefinedValues?: PredefinedValuesObject;
+  muted?: boolean;
+  seperateLines?: boolean;
+  endl?: boolean;
+  format?: string;
 }
+type DefinedMethod = (msg: LoggerMessage, context?: unknown) => void | unknown
+type DefinedMethodKey = "write"
+type DefinedMethods = Map<DefinedMethodKey, DefinedMethod>
 
 export class Transport {
-  constructor(private adapters: Adapter[]){}
-  public post(msg: LoggerMessage){
-    for (let adapter of this.adapters){
-      adapter.write(msg)
-    }
+  private definedMethods: DefinedMethods = new Map()
+  private enabled: boolean = true
+
+  static Console(context?: any): Transport {
+    const transport = new Transport(context)
+    transport.setMethod('write', (msg, context) => {
+      process.stdout.write(msg.content.formatted)
+    })
+    return transport
   }
-  public getAdapter(id: string): Adapter | undefined{
-    return this.adapters.find(adapter => adapter.id === id)
+
+  constructor(public context?: any){}
+  public post(msg){
+    if (this.enabled){
+      if (this.definedMethods.has("write")) {
+        const cb = this.definedMethods.get("write")
+        cb(msg, this.context)
+        return true
+      } else return false
+    } else return false
   }
-  public getAdapters(){
-    return this.adapters
+  public setMethod(key, callback, opts?: { force: boolean }): boolean {
+    if (this.definedMethods.has(key) && !opts.force) return false
+    this.definedMethods.set(key, callback)
+    return true
   }
-  public removeAdapter(id: string): Adapter{
-    return this.adapters.splice(this.adapters.findIndex(adapter => adapter.id === id), 1)[0]
+  public removeMethod(key): boolean {
+    return this.definedMethods.delete(key)
   }
-  public addAdapter(adapter: Adapter){
-    this.adapters.push(adapter)
-  }
-  public disableAdapter(adapterId: string) {
-    this.getAdapter(adapterId)?.disable()
-  }
-  public enableAdapter(adapterId: string) {
-    this.getAdapter(adapterId)?.enable()
-  }
+  public disable(){ this.enabled = false }
+  public enable(){ this.enabled = true }
 }
 
 const declaredLoggers: Set<string> = new Set()
 const nextLoggerId = createAutoIncrement()
 
-export class Pipe {
-  static Declared: Pipe[] = []
+class Pipe {
+  static Instances: Pipe[] = []
 
   private muted = false
   private unmutingMessages = false
 
   constructor(private sender: Logger, private receiver: Logger){
-    const f = Pipe.Declared.find(pipe =>
+    const f = Pipe.Instances.find(pipe =>
       pipe.sender.getId() === sender.getId() && pipe.receiver.getId() === receiver.getId()
     )
     if (f !== undefined) return f
-    else Pipe.Declared.push(this)
+    else Pipe.Instances.push(this)
   }
   write(msg: LoggerMessage){
     if (this.muted === true) msg.muted = true
@@ -100,9 +115,12 @@ export class Logger {
   static ALL = Logger.SUCCESS | Logger.INFO | Logger.ERROR | Logger.WARNING
 
   private areMessagesMuted = false
+
   private logFormat: string = Logger.defaultFormat
   private logLevel: number = Logger.ALL
   private replacer: ReplacerFn
+
+  private transports: Transport[]
   private predefinedValues: Map<string, PredefinedValue> = new Map([
     ["pre", ""],
     ["post", ""],
@@ -115,7 +133,12 @@ export class Logger {
   private pipes: Pipe[] = []
   private id: string
 
-  constructor(public transport: Transport, opts?: LoggerOpts){
+  static createLogger(opts: LoggerConstructorOptions){
+    return new Logger(opts)
+  }
+
+  constructor(opts: LoggerConstructorOptions){
+    this.transports = opts.transports
     this.id = opts?.id ?? `logger0x${nextLoggerId().toString(16)}`
     declaredLoggers.add(this.id)
     this.replacer = opts?.replacer || ((a, b, i, msgs) => {
@@ -123,36 +146,35 @@ export class Logger {
       if ( i != msgs.length-1) a += ' '
       return a
     })
-    if (opts?.customPostfix) this.setPostfix(opts.customPostfix)
-    if (opts?.customPrefix) this.setPrefix(opts.customPrefix)
     if (opts?.predefinedValues) Object.entries(opts.predefinedValues).forEach(([k, v]) => {
       this.predefinedValues.set(k, v)
     })
   }
-  public convertToString(msgs: any[]){
-    if (type(msgs) !== 'array') msgs = [msgs]
-    return msgs.reduce(this.replacer.bind(this), '')
+  public convertToString(msgs: unknown[] | unknown): string{
+    return (Array.isArray(msgs) ? msgs : [msgs]).reduce<string>(this.replacer.bind(this), '')
   }
   public formatMessage(msg: LoggerMessage, dformat = this.logFormat, localPredefinedValues: { [key: string]: PredefinedValue } = {}){
-    const evalPredefinedValue = (val: PredefinedValue, msg: string) => {
+    const evalPredefinedValue = (val: PredefinedValue, msg: string): string => {
       return typeof val === 'function' ? this.convertToString(val(msg)) : this.convertToString(val)
     }
     const stringMsg = this.convertToString(msg.content.raw)
     const formatValues: Map<string, string> = new Map([
-      ...([...this.predefinedValues.entries()].map(([k, v]) => {
-        return [k.startsWith("%") ? k : "%" + k, evalPredefinedValue(v, stringMsg)] as [string, string]
-      })),
-      ...(Object.entries(localPredefinedValues).map(([k, v]) => {
-        return [k.startsWith("%") ? k : "%" + k, evalPredefinedValue(v, stringMsg)] as [string, string]
-      })),
       ["%msg", stringMsg]
     ])
+    const addPredefinedValues = (iterable: Iterable<[string, PredefinedValue]>) => {
+      for (let [key, predefined] of iterable){
+        formatValues.set(key.startsWith("%") ? key : "%" + key, evalPredefinedValue(predefined, stringMsg))
+      }
+    }
+    addPredefinedValues(this.predefinedValues.entries())
+    addPredefinedValues(Object.entries(localPredefinedValues))
+
     const format = dformat.replace(/(%[a-zA-Z0-9_-]+)/g, (found) => {
       if (formatValues.has(found)) return formatValues.get(String(found))
       return found
     })
 
-    return chalkTaggedTemplate`${format}`
+    return chalkTaggedTemplate(format)
   }
   public logOptions(raw: any[], options: Partial<LoggerMessage> = {}){
     const endl = options.endl ?? true
@@ -178,7 +200,7 @@ export class Logger {
     this.logOptions(msgs, {
       level: Logger.INFO,
       predefinedValues: {
-        "log-symbol": this.predefinedValue("info-symbol")
+        "log-symbol": this.getPredefinedValue("info-symbol")
       }
     })
   }
@@ -186,7 +208,7 @@ export class Logger {
     this.logOptions(msgs, {
       level: Logger.WARNING,
       predefinedValues: {
-        "log-symbol": this.predefinedValue("warn-symbol")
+        "log-symbol": this.getPredefinedValue("warn-symbol")
       }
     })
   }
@@ -194,7 +216,7 @@ export class Logger {
     this.logOptions(msgs, {
       level: Logger.SUCCESS,
       predefinedValues: {
-        "log-symbol": this.predefinedValue("success-symbol")
+        "log-symbol": this.getPredefinedValue("success-symbol")
       }
     })
   }
@@ -202,23 +224,21 @@ export class Logger {
     this.logOptions(msgs, {
       level: Logger.ERROR,
       predefinedValues: {
-        "log-symbol": this.predefinedValue("error-symbol")
+        "log-symbol": this.getPredefinedValue("error-symbol")
       }
     })
   }
   public write(msg: LoggerMessage){
     for (let pipe of this.pipes) pipe.write(cloneDeep(msg))
     if (!(msg.level & this.logLevel) || this.areMessagesMuted) msg.muted = true
-    this.transport.post(msg)
+    for (let transport of this.transports) transport.post(msg)
     return this
   }
-  public createCopy(options: Partial<LoggerOpts & { format: string, logLevel: number }> = {}): Logger{
-    const clone = new Logger(this.transport, {
-      ...options,
-      customPostfix: this.predefinedValue("post"),
-      customPrefix: this.predefinedValue("pre"),
-      predefinedValues: this.predefinedValues,
-      replacer: this.replacer
+  public createCopy(options: Partial<LoggerConstructorOptions> = {}): Logger{
+    const clone = new Logger({
+      predefinedValues: Object.fromEntries(this.predefinedValues.entries()),
+      replacer: this.replacer,
+      transports: this.transports
     })
     clone.setLogFormat(options.format ?? this.logFormat)
     clone.setLogLevel(options.logLevel ?? this.logLevel)
@@ -231,22 +251,6 @@ export class Logger {
     this.pipes.push(pipe)
     return pipe
   }
-  public setPrefix(prefix: PredefinedValue): Logger{
-    this.setPredefinedValue("pre", prefix)
-    return this
-  }
-  public setPostfix(postfix: PredefinedValue): Logger{
-    this.setPredefinedValue("post", postfix)
-    return this
-  }
-  public clearPrefix(): Logger{
-    this.setPredefinedValue("pre", '')
-    return this
-  }
-  public clearPostfix(): Logger{
-    this.setPredefinedValue("post", '')
-    return this
-  }
   public setLogFormat(format?: string): Logger{
     this.logFormat = format || Logger.defaultFormat
     return this
@@ -258,8 +262,8 @@ export class Logger {
   public getLogFormat(){
     return this.logFormat
   }
-  public setTransport(transport: Transport): Logger{
-    this.transport = transport
+  public addTransport(transport: Transport): Logger{
+    this.transports.push(transport)
     return this
   }
   public muteMessages(){
@@ -272,24 +276,18 @@ export class Logger {
     this.predefinedValues.set(key, value)
     return this
   }
-  public predefinedValue(key: string): PredefinedValue | undefined {
+  public getPredefinedValue(key: string): PredefinedValue | undefined {
     return this.predefinedValues.get(key)
   }
-  public removePredefinedValue(key: string): Logger{
+  public removePredefinedValue(key: string): Logger {
     this.predefinedValues.delete(key)
     return this
   }
   public getId(): string {
     return this.id+''
   }
-  public getPipes(): Pipe[] {
-    return [...this.pipes.values()]
+  public getPipes(): Iterable<Pipe> {
+    return this.pipes.values()
   }
 }
 
-export function combineTransports(...transports: Transport[]){
-  const CombinedTransport = new Transport([
-    ...transports.flatMap(t => t.getAdapters())
-  ])
-  return CombinedTransport
-}

@@ -1,18 +1,21 @@
 {
   "compilerOptions": {
-    "skipLibCheck": true,
     "target": "ES2016",
     "module": "CommonJS",
-    "allowJs": true,
     "lib": [
-      "ES2019"
+      "ES2019",
+      "ES2015"
     ],
-    "moduleResolution": "node",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "paths": {
       "@/*": ["./*"]
     },
-    "sourceMap": true
-  }
+    "declaration": true,
+    "outDir": "./dist",
+  },
+  "exclude": [
+    "./src/tests",
+    "./dist"
+  ],
 }

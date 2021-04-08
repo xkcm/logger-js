@@ -1,2 +1,3 @@
-### logger-js
+# logger-js
+
 Complex logger for JavaScript
