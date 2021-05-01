@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 
-export const vtype: (a: any) => string = (a) => ({}).toString.call(a).match(/\s([a-zA-Z]+)/)[1].toLowerCase()
+// export const vtype: (a: any) => string = (a) => ({}).toString.call(a).match(/\s([a-zA-Z]+)/)[1].toLowerCase()
 
 export function chalkTaggedTemplate(txt) {
   return ((parts, ...substitutions) => {

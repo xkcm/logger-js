@@ -1,7 +1,8 @@
 {
   "name": "logger-js",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "license": "MIT",
   "author": {
     "email": "maciejka.citko@gmail.com",
@@ -9,16 +10,20 @@
   },
   "scripts": {
     "test": "npx jest",
-    "webpack": "npx webpack --mode development",
-    "webpack:prod": "npx webpack --mode production"
+    "clear-dist": "rm -rf dist/",
+    "build": "yarn clear-dist && npx webpack --mode development",
+    "build:prod": "yarn clear-dist && npx webpack --mode production"
   },
   "dependencies": {
     "chalk": "^4.1.0",
     "lodash": "^4.17.21"
   },
   "devDependencies": {
+    "@types/faker": "^5.5.1",
     "@types/jest": "^26.0.22",
+    "@types/lodash": "^4.14.168",
     "@types/node": "^14.14.35",
+    "faker": "^5.5.3",
     "jest": "^26.6.3",
     "ts-jest": "^26.5.4",
     "ts-loader": "^8.1.0",

@@ -1,5 +1,5 @@
 import chalk from "chalk"
-import { chalkTaggedTemplate, createAutoIncrement, unchalk } from "../utils"
+import { chalkTaggedTemplate, createAutoIncrement, unchalk } from "../src/utils"
 
 
 describe('test suite for utils', () => {

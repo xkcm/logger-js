@@ -1,21 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2016",
     "module": "CommonJS",
-    "lib": [
-      "ES2019",
-      "ES2015"
-    ],
-    "resolveJsonModule": true,
     "esModuleInterop": true,
-    "paths": {
-      "@/*": ["./*"]
-    },
     "declaration": true,
     "outDir": "./dist",
+    "downlevelIteration": true
   },
   "exclude": [
-    "./src/tests",
+    "./tests",
     "./dist"
   ],
+  "include": [
+    "./src"
+  ]
 }
