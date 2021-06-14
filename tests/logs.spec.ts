@@ -1,5 +1,6 @@
 import { Logger, Transport, Levels } from '../src/index'
 import { lorem } from 'faker'
+import fs from 'fs'
 
 const mockStdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
 
@@ -99,5 +100,14 @@ describe('Testing loggers', () => {
   })
   it('"ALL" level should match value', () => {
     expect(logger.getLevel()).toEqual(Levels.ALL)
+  })
+  it('should create file logger and log into file', () => {
+    const spiedFn = jest.spyOn(fs, 'writeFileSync')
+    const fileTransport = Transport.File({ filepath: '/dev/null' })
+    const fileLogger = new Logger({
+      transports: { fileTransport }
+    })
+    fileLogger.log('test')
+    expect(spiedFn).toBeCalled()
   })
 })
