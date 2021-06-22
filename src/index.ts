@@ -1,6 +1,6 @@
 import { cloneDeep, fromPairs } from "lodash"
 import { chalkTaggedTemplate, createAutoIncrement, unchalk } from "./utils"
-import { Levels } from "./levels"
+import { LevelManager } from "./levels"
 import * as fs from 'fs'
 
 namespace TTransport {
@@ -14,12 +14,12 @@ namespace TTransport {
 }
 namespace TLogger {
   export type ID = string
-  export type PredefinedValue = ((msg?: string) => string) | string
+  export type PredefinedValue = ((msg?: Message) => string) | string
   export type PredefinedValuesObject = Record<string, PredefinedValue>
-  export type Replacer = (a: string, b: unknown, index?: number, array?: unknown[]) => string
+  export type Reducer = (a: string, b: unknown, index?: number, array?: unknown[]) => string
   export type ConstructorOptions = {
     transports: Record<TTransport.ID, Transport>;
-    replacer?: Replacer;
+    replacer?: Reducer;
     predefinedValues?: PredefinedValuesObject;
     id?: string;
     format?: string;
@@ -168,62 +168,77 @@ class Pipe {
 
 export class Logger {
 
-  static defaultFormatString = '%log-symbol %msg {gray [%date]}'
+  static defaultFormatString = '%symbol %msg {gray [%date]}'
 
   private areMessagesMuted = false
 
   private formatString: string = Logger.defaultFormatString
   private level: number = 0
-  private doesLevelIncludeAllLevels: boolean = false
-  private replacer: TLogger.Replacer
+  public levels: LevelManager
+
+  private reducer: TLogger.Reducer
 
   private transports: Record<TTransport.ID, Transport> = {}
   private predefinedValues = new Map<string, TLogger.PredefinedValue>([
     ["pre", ""],
     ["post", ""],
     ["date", () => new Date().toISOString()],
-    ["info-symbol", "ℹ️ "],
-    ["warn-symbol", "⚠️ "],
-    ["success-symbol", "✅"],
-    ["error-symbol", "❌"]
+    ["symbol", (msg) => {
+      if (msg.level & this.levels.get('INFO')) return "ℹ️ "
+      if (msg.level & this.levels.get('WARNING')) return "⚠️ "
+      if (msg.level & this.levels.get('SUCCESS')) return "✅"
+      if (msg.level & this.levels.get('ERROR')) return "❌"
+      return ""
+    }]
   ])
   private pipes: Pipe[] = []
   private id: string
 
-  static createLogger(opts: TLogger.ConstructorOptions) {
-    return new Logger(opts)
-  }
-
   constructor(opts: TLogger.ConstructorOptions) {
     this.transports = opts.transports
     this.id = newLoggerId(opts.id)
-    this.replacer = opts?.replacer || ((a, b, i, msgs) => {
+
+    this.reducer = opts?.replacer || ((a, b, i, msgs) => {
       a += typeof b === "string" ? b : JSON.stringify(b)
       if (i != msgs.length - 1) a += ' '
       return a
     })
+
     if (opts?.predefinedValues) Object.entries(opts.predefinedValues).forEach(([k, v]) => {
       this.predefinedValues.set(k, v)
     })
-    this.setLevel(Levels.ALL)
+
+    this.levels = new LevelManager({
+      skipDefault: false,
+      custom: []
+    })
+    this.setLevel(this.levels.get('ALL'))
+    
     loggerInstances.push(this)
   }
   // helpers
   public convertToString(msgs: unknown[] | unknown): string {
-    return (Array.isArray(msgs) ? msgs : [msgs]).reduce<string>(this.replacer.bind(this), '')
+    return (
+      Array.isArray(msgs)
+      ? msgs
+      : [msgs]
+    ).reduce<string>(this.reducer.bind(this), '')
   }
-  public formatMessage(joinedSegments: string, dformat = this.formatString, localPredefinedValues: TLogger.PredefinedValuesObject = {}) {
-    const evalPredefinedValue = (val: TLogger.PredefinedValue, msg: string): string => {
+  public formatMessage(msg: TLogger.Message, dformat = this.formatString, localPredefinedValues: TLogger.PredefinedValuesObject = {}) {
+
+    const evalPredefinedValue = (val: TLogger.PredefinedValue, msg: TLogger.Message): string => {
       return typeof val === 'function' ? this.convertToString(val(msg)) : this.convertToString(val)
     }
+
     const formatValues = new Map<string, string>([
-      ["%msg", joinedSegments]
+      ["%msg", msg.content.joinedSegments]
     ])
     const addPredefinedValues = (iterable: Iterable<[string, TLogger.PredefinedValue]>) => {
       for (let [key, predefined] of iterable) {
-        formatValues.set(key.startsWith("%") ? key : "%" + key, evalPredefinedValue(predefined, joinedSegments))
+        formatValues.set(key.startsWith("%") ? key : "%" + key, evalPredefinedValue(predefined, msg))
       }
     }
+
     addPredefinedValues(this.predefinedValues)
     addPredefinedValues(Object.entries(localPredefinedValues))
 
@@ -245,13 +260,13 @@ export class Logger {
         segments: raw,
         joinedSegments
       },
-      level: options.level ?? Levels.INFO,
+      level: options.level ?? this.levels.get('INFO'),
       sourceLogger: this.id,
       endl,
       format
     }
     if (this.formatString) {
-      const formatted = this.formatMessage(joinedSegments, options.forceFormat, options.predefinedValues) + (endl ? '\n' : '')
+      const formatted = this.formatMessage(msg, options.forceFormat, options.predefinedValues) + (endl ? '\n' : '')
       msg.content.formatted = formatted
       msg.content.unformatted = unchalk(formatted)
     }
@@ -260,37 +275,25 @@ export class Logger {
   public log(...msgs: unknown[]): this { return this.info(...msgs) }
   public info(...msgs: unknown[]): this {
     this.logWithOptions(msgs, {
-      level: Levels.INFO,
-      predefinedValues: {
-        "log-symbol": this.getPredefinedValue("info-symbol")
-      }
+      level: this.levels.get('INFO')
     })
     return this
   }
   public warn(...msgs: unknown[]): this {
     this.logWithOptions(msgs, {
-      level: Levels.WARNING,
-      predefinedValues: {
-        "log-symbol": this.getPredefinedValue("warn-symbol")
-      }
+      level: this.levels.get('WARNING')
     })
     return this
   }
   public success(...msgs: unknown[]): this {
     this.logWithOptions(msgs, {
-      level: Levels.SUCCESS,
-      predefinedValues: {
-        "log-symbol": this.getPredefinedValue("success-symbol")
-      }
+      level: this.levels.get('SUCCESS')
     })
     return this
   }
   public error(...msgs: unknown[]): this {
     this.logWithOptions(msgs, {
-      level: Levels.ERROR,
-      predefinedValues: {
-        "log-symbol": this.getPredefinedValue("error-symbol")
-      }
+      level: this.levels.get('ERROR')
     })
     return this
   }
@@ -304,7 +307,7 @@ export class Logger {
   public createCopy(options: Partial<TLogger.ConstructorOptions> = {}): Logger {
     const clone = new Logger({
       predefinedValues: fromPairs([...this.predefinedValues.entries()]),
-      replacer: this.replacer,
+      replacer: this.reducer,
       transports: {
         ...this.transports
       },
@@ -339,12 +342,11 @@ export class Logger {
   }
   // level
   public setLevel(level: number) {
-    if (level === Levels.ALL) this.doesLevelIncludeAllLevels = true
     this.level = level
     return this
   }
   public getLevel(): number {
-    return this.doesLevelIncludeAllLevels ? Levels.ALL : this.level
+    return this.level
   }
 
   // transports
@@ -383,5 +385,3 @@ export class Logger {
     return this.id
   }
 }
-
-export { Levels }
