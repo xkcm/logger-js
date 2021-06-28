@@ -213,6 +213,7 @@ export class Logger {
     return (Array.isArray(msgs) ? msgs : [msgs]).reduce<string>(this.replacer.bind(this), '')
   }
   public formatMessage(joinedSegments: string, dformat = this.formatString, localPredefinedValues: TLogger.PredefinedValuesObject = {}) {
+    
     const evalPredefinedValue = (val: TLogger.PredefinedValue, msg: string): string => {
       return typeof val === 'function' ? this.convertToString(val(msg)) : this.convertToString(val)
     }
@@ -224,6 +225,7 @@ export class Logger {
         formatValues.set(key.startsWith("%") ? key : "%" + key, evalPredefinedValue(predefined, joinedSegments))
       }
     }
+
     addPredefinedValues(this.predefinedValues)
     addPredefinedValues(Object.entries(localPredefinedValues))
 
