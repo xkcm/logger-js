@@ -1,33 +1,30 @@
-const LevelsMap = new Map<string, number>([
-  ['SUCCESS', 0b1],
-  ['INFO', 0b10],
-  ['ERROR', 0b100],
-  ['WARNING', 0b1000],
-])
-type Target = {
-  [key: string]: any;
-  add: (name: string) => void;
-  remove: (name: string) => void;
-  keys: () => string[]
-}
-const target: Target = {
-  add: (name: string) => {
-    const val = Math.pow(2, LevelsMap.size)
-    LevelsMap.set(name.toUpperCase(), val)
-  },
-  remove: (name: string) => LevelsMap.delete(name),
-  keys: () => [...LevelsMap.keys()]
-}
-Object.defineProperty(target, 'ALL', {
-  get() {
-    return Math.pow(2, LevelsMap.size) - 1
+
+export class LevelManager {
+  private levelsMap = new Map<string, number>()
+  constructor(opts: { skipDefault?: boolean, custom?: string[] } = {}){
+    if (!opts.skipDefault) {
+      this.add('INFO')
+      this.add('SUCCESS')
+      this.add('WARNING')
+      this.add('ERROR')
+    }
+    if (opts.custom) {
+      opts.custom.forEach(name => this.add(name))
+    }
   }
-})
-const Levels = new Proxy(target, {
-  get(target, name: string) {
-    if (name in target) return target[name]
-    if (name.toUpperCase() in target) return target[name.toUpperCase()]
-    return LevelsMap.get(name.toUpperCase())
+  public add(name: string): number{
+    name = name.toUpperCase()
+    if (name === 'ALL') return
+    const s = this.levelsMap.size
+    this.levelsMap.set(name, Math.pow(2, s))
   }
-})
-export { Levels }
+  public get(...names: string[]): number{
+    names = names.map(name => name.toUpperCase())
+    let result = 0
+    const getVal = (name: string) => {
+      if (name === 'ALL') return Math.pow(2, this.levelsMap.size) - 1
+      else return this.levelsMap.get(name) ?? 0
+    }
+    return names.reduce((prev, cur) => prev | getVal(cur), result)
+  }
+}
