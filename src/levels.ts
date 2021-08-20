@@ -27,4 +27,7 @@ export class LevelManager {
     }
     return names.reduce((prev, cur) => prev | getVal(cur), result)
   }
+  public getLevelNames(): string[]{
+    return [...this.levelsMap.keys()]
+  }
 }

@@ -67,8 +67,8 @@ describe('Testing loggers', () => {
     expect(mockedWrite).toBeCalledWith(expect.objectContaining({
       content: {
         formatted: msg + '\n',
-        unformatted: msg + '\n',
-        segments: [msg],
+        plain: msg + '\n',
+        passedSegments: [msg],
         joinedSegments: msg
       }
     }), mockedTransportContext)
