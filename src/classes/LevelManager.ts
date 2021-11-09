@@ -9,7 +9,7 @@ export class LevelManager {
       this.add('ERROR')
     }
     if (opts.custom) {
-      opts.custom.forEach(name => this.add(name))
+      opts.custom.forEach(this.add.bind(this))
     }
   }
   public add(name: string): number{

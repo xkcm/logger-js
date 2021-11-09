@@ -33,3 +33,5 @@ export function createAutoIncrement(startValue = 0, step = 1) {
   })()
   return () => gen.next().value
 }
+
+export const formatId = (prefix: string, id: number) => `${prefix}0x${id.toString(16)}`

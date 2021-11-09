@@ -1,19 +1,26 @@
-import { Logger, Transport } from '../src/index'
 import { lorem } from 'faker'
 import fs from 'fs'
 
-const mockStdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+import { Logger, Transport } from '../src/index'
 
 describe('Testing loggers', () => {
+
+  const mockStdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+  
   let logger: Logger
+  
   it('should create a new logger', () => {
     logger = new Logger({
       transports: {
         console1: Transport.create.Console()
       }
     })
-    expect(logger instanceof Logger).toBeTruthy()
-    expect(logger.getFormat()).toBe(Logger.defaultFormatString)
+    expect(logger).toBeInstanceOf(Logger)
+    expect(logger.getFormat()).toBe(Logger.DEFAULT_FORMAT_STRING)
     expect(logger.getLevel()).toBe(logger.levels.get('ALL'))
   })
   it('should change log format and log "TestMessage1_$" to console', () => {
@@ -38,11 +45,13 @@ describe('Testing loggers', () => {
     logger.removeTransport(key)
     expect(logger.getTransports()).not.toContainEqual(expect.objectContaining({ key }))
   })
-  it('should mute messages', () => {
-    mockStdout.mockClear()
+  it('should mute messages', () => {    
     logger.muteMessages()
     logger.log('it shouldnt be displayed')
     expect(mockStdout).not.toHaveBeenCalled()
+    logger.unmuteMessages()
+    logger.log('it should be displayed')
+    expect(mockStdout).toHaveBeenCalled()
   })
 
   const mockedTransportContext = {
@@ -85,22 +94,17 @@ describe('Testing loggers', () => {
     expect(pipe.isMuted()).toBeTruthy()
     expect(pipe.doesUnmuteMessages()).toBeFalsy()
   })
-  it('should destroy pipe', () => {
-    const destroyedPipe = copy.getPipes()[0].destroy()
+  it('should destroy pipes', () => {
+    const destroyedPipe0 = copy.getPipes()[0].destroy()
     expect(copy.getPipes().length).toEqual(0)
-    expect(destroyedPipe.receiver).toBeUndefined()
-    expect(destroyedPipe.sender).toBeUndefined()
+    expect(destroyedPipe0.receiver).toBeUndefined()
+    expect(destroyedPipe0.sender).toBeUndefined()
+
+    const destroyedPipe1 = logger.getPipes()[0].destroy()
+    expect(logger.getPipes().length).toEqual(0)
+    expect(destroyedPipe1.receiver).toBeUndefined()
+    expect(destroyedPipe1.sender).toBeUndefined()
   })
-  // it('should add new level', () => {
-  //   Levels.add('YOMENIK')
-  //   expect(Levels.YOMENIK).toBeDefined()
-  //   expect(Levels.ALL).toEqual(Levels.YOMENIK * 2 - 1)
-  //   expect(Levels.keys().length).toEqual(5)
-  //   expect(logger.getLevel()).toEqual(Levels.ALL)
-  // })
-  // it('"ALL" level should match value', () => {
-  //   expect(logger.getLevel()).toEqual(Levels.ALL)
-  // })
   it('should create file logger and log into file', () => {
     const spiedFn = jest.spyOn(fs, 'writeFileSync')
     const fileTransport = Transport.create.File({ filepath: '/dev/null' })
@@ -109,5 +113,22 @@ describe('Testing loggers', () => {
     })
     fileLogger.log('test')
     expect(spiedFn).toBeCalled()
+  })
+  it('"ALL" level should match value', () => {
+    expect(logger.getLevel()).toEqual(logger.levels.get('ALL'))
+  })
+  it('should set a new logging level', () => {
+    const newLevel = logger.levels.get('INFO') | logger.levels.get('SUCCESS')
+    logger.setLevel(newLevel)
+    expect(logger.getLevel()).not.toEqual(logger.levels.get('ALL'))
+    expect(logger.getLevel()).toEqual(newLevel)
+  })
+  it('should not log error message', () => {    
+    logger.error("error_msg")
+    expect(mockStdout).not.toHaveBeenCalled()
+  })
+  it('should log info message', () => {    
+    logger.info("info_msg")
+    expect(mockStdout).toHaveBeenCalled()
   })
 })

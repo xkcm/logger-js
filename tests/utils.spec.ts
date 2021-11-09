@@ -1,7 +1,6 @@
 import chalk from "chalk"
 import { chalkTaggedTemplate, createAutoIncrement, unchalk } from "../src/utils"
 
-
 describe('test suite for utils', () => {
   it('should create autoincrement generator (start=0, step=1)', () => {
     const step = 1
