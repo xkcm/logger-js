@@ -11,8 +11,8 @@
   "scripts": {
     "test": "npx jest",
     "clear-dist": "rm -rf dist/",
-    "build": "yarn clear-dist && npx webpack --mode development",
-    "build:prod": "yarn clear-dist && npx webpack --mode production"
+    "build": "export NODE_OPTIONS=--openssl-legacy-provider && yarn clear-dist && npx webpack --mode development",
+    "build:prod": "export NODE_OPTIONS=--openssl-legacy-provider && yarn clear-dist && npx webpack --mode production"
   },
   "dependencies": {
     "chalk": "^4.1.0",

@@ -15,7 +15,7 @@ export class Transport<Context = unknown> {
   public context: Context
   public id: TTransport.ID
 
-  static create = {
+  static builtin = {
     Console<C>(context?: C): Transport {
       const transport = new Transport<C>({ context })
       transport.setMethod('write', (msg) => {

@@ -32,10 +32,9 @@ export namespace TLogger {
     };
     level: number;
     sourceLogger: string;
-    forceFormat?: string;
     predefinedValues?: PredefinedValuesObject;
     muted?: boolean;
-    seperateLines?: boolean;
+    separateLines?: boolean;
     endl?: boolean;
     format?: string;
   }

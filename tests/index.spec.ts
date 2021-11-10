@@ -16,7 +16,7 @@ describe('Testing loggers', () => {
   it('should create a new logger', () => {
     logger = new Logger({
       transports: {
-        console1: Transport.create.Console()
+        console1: Transport.builtin.Console()
       }
     })
     expect(logger).toBeInstanceOf(Logger)
@@ -37,7 +37,7 @@ describe('Testing loggers', () => {
   })
   it('should add new transport', () => {
     const key = 'console2'
-    logger.addTransport(key, Transport.create.Console())
+    logger.addTransport(key, Transport.builtin.Console())
     expect(logger.getTransports()).toContainEqual(expect.objectContaining({ key }))
   })
   it('should remove added transport', () => {
@@ -107,7 +107,7 @@ describe('Testing loggers', () => {
   })
   it('should create file logger and log into file', () => {
     const spiedFn = jest.spyOn(fs, 'writeFileSync')
-    const fileTransport = Transport.create.File({ filepath: '/dev/null' })
+    const fileTransport = Transport.builtin.File({ filepath: '/dev/null' })
     const fileLogger = new Logger({
       transports: { fileTransport }
     })

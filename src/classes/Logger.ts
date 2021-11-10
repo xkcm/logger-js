@@ -15,6 +15,15 @@ export class Logger {
 
   static DEFAULT_FORMAT_STRING = '%symbol %msg {gray [%date]}'
   static FORMAT_PREFIX = '%'
+  static DEFAULT_REDUCER = (
+    (convertOptions) =>
+      (a, b, i, msgs) =>
+        {
+          a += typeof b === "string" ? b : JSON.stringify(b)
+          if (i != msgs.length - 1) a += convertOptions.joinChar || ' '
+          return a
+        }
+  )
 
   public levels: LevelManager
 
@@ -25,8 +34,6 @@ export class Logger {
   private reducer: TLogger.Reducer
   private transports: Record<TTransport.ID, Transport> = {}
   private predefinedValues = new Map<string, TLogger.PredefinedValue>([
-    ["pre", ""],
-    ["post", ""],
     ["date", () => new Date().toISOString()],
     ["symbol", (msg) => {
       if (msg.level & this.levels.get('INFO')) return "[INFO]"
@@ -39,29 +46,22 @@ export class Logger {
   private pipes: Pipe[] = []
   private id: string
 
-  constructor(opts: TLogger.ConstructorOptions) {
-    this.transports = opts.transports
-    this.id = newLoggerId(opts.id)
-    this.formatString = opts.format || Logger.DEFAULT_FORMAT_STRING
+  constructor(options: TLogger.ConstructorOptions) {
+    this.transports = options.transports
+    this.id = newLoggerId(options.id)
+    this.formatString = options.format || Logger.DEFAULT_FORMAT_STRING
 
-    this.reducer = opts.replacer || (
-      (convertOptions) =>
-        (a, b, i, msgs) => {
-          a += typeof b === "string" ? b : JSON.stringify(b)
-          if (i != msgs.length - 1) a += convertOptions.joinChar || ' '
-          return a
-        }
-    )
+    this.reducer = options.replacer || Logger.DEFAULT_REDUCER
 
-    if (opts.predefinedValues) Object.entries(opts.predefinedValues).forEach(([k, v]) => {
+    if (options.predefinedValues) Object.entries(options.predefinedValues).forEach(([k, v]) => {
       this.predefinedValues.set(k, v)
     })
 
     this.levels = new LevelManager({
       skipDefault: false,
-      custom: [...(opts.customLevels || [])]
+      custom: [...(options.customLevels || [])]
     })
-    this.setLevel(opts.logLevel || this.levels.get('ALL'))
+    this.setLevel(options.logLevel || this.levels.get('ALL'))
     
     loggerInstances.push(this)
   }
