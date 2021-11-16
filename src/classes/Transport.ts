@@ -1,6 +1,6 @@
 import { writeFileSync, appendFileSync } from "fs"
 import { createAutoIncrement, formatId } from "../utils"
-import { TTransport } from "./Types"
+import { TLogger, TTransport } from "./Types"
 
 const transportInstances: Transport[] = []
 const nextTransportId = createAutoIncrement()
@@ -38,7 +38,7 @@ export class Transport<Context = unknown> {
     this.id = newTransportID(opts.id)
     transportInstances.push(this)
   }
-  public post(msg) {
+  public post(msg: TLogger.MessageObject) {
     if (this.enabled) {
       if (this.definedMethods.has("write")) {
         const cb = this.definedMethods.get("write")
@@ -55,6 +55,6 @@ export class Transport<Context = unknown> {
   public removeMethod(key): boolean {
     return this.definedMethods.delete(key)
   }
-  public disable() { this.enabled = false }
-  public enable() { this.enabled = true }
+  public disable() { return this.enabled = false }
+  public enable() { return this.enabled = true }
 }

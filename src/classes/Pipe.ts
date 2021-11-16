@@ -23,7 +23,7 @@ export class Pipe {
     pipesInstances.push(this)
     this.id = newPipeId()
   }
-  write(msg: TLogger.MessageObject) {
+  public write(msg: TLogger.MessageObject) {
     if (this.muted === true) msg.muted = true
     if (msg.muted === true && this.unmutingMessages) msg.muted = false
     this.receiver.postMessage(msg)

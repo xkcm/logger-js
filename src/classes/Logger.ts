@@ -213,8 +213,8 @@ export class Logger {
     return this
   }
   // muting messages
-  public muteMessages() { this.areMessagesMuted = true }
-  public unmuteMessages() { this.areMessagesMuted = false }
+  public muteMessages() { return this.areMessagesMuted = true }
+  public unmuteMessages() { return this.areMessagesMuted = false }
   public isMuted() { return this.areMessagesMuted }
 
   // predefined values
@@ -233,5 +233,9 @@ export class Logger {
   // getters
   public getId(): string {
     return this.id
+  }
+
+  public getPipe(pipeId: string){
+    return this.pipes.find(pipe => pipe.getId() === pipeId)
   }
 }
